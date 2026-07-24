@@ -192,8 +192,6 @@ def train(model, train_ds, val_ds, epochs=50, lr=3e-4, patience=5):
                 val_loss += loss_fn(model(x), y).item() * len(y)
                 n_val += len(y)
         val_loss /= n_val
-        print(f"epoch {epoch:3d}  val_loss {val_loss:.4f}  lr {sched.get_last_lr()[0]:.2e}")
-
         if val_loss < best_val - 1e-4:              # improvement -> checkpoint
             best_val, bad_epochs = val_loss, 0
             torch.save({"epoch": epoch, "model": model.state_dict(),

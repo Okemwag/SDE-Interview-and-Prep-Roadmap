@@ -373,6 +373,12 @@ Welcome to the SDE Interview Preparation Roadmap! This repository is not just ab
 <details>
 <summary>7. <span style="color:green;">Programming Languages and Concepts</span></summary>
 
+   - **Language Deep Dives** (guides with diagrams, code examples, and interview questions):
+     - [ ] [**Java**](./Programming%20Languages%20and%20Concepts/Java/README.md)
+     - [ ] [**Kotlin**](./Programming%20Languages%20and%20Concepts/Kotlin/README.md)
+     - [ ] [**Go**](./Programming%20Languages%20and%20Concepts/Go/README.md)
+     - [ ] [**TypeScript**](./Programming%20Languages%20and%20Concepts/TypeScript/README.md)
+     - [ ] [**Python**](./Programming%20Languages%20and%20Concepts/Python/README.md)
    - [ ] **Programming paradigms**
      - [ ] Imperative programming
      - [ ] Declarative programming
@@ -537,6 +543,44 @@ Welcome to the SDE Interview Preparation Roadmap! This repository is not just ab
    - [ ] [**Git**](./Version%20Control%20Systems/Git.md)
    - [ ] **Bitbucket**
 
+
+</details>
+
+<details>
+<summary>11. <span style="color:green;">AI Engineering</span></summary>
+
+   - [ ] [**Overview**](./AI%20Engineering/README.md)
+   - [ ] **Machine Learning Fundamentals**
+     - [ ] Supervised vs. Unsupervised vs. Reinforcement learning
+     - [ ] Bias-variance trade-off, overfitting, regularization
+     - [ ] Evaluation metrics (accuracy, precision, recall, F1, ROC-AUC)
+   - [ ] **Deep Learning**
+     - [ ] Neural networks and backpropagation
+     - [ ] CNNs, RNNs, LSTMs
+     - [ ] Transformers and attention mechanisms
+   - [ ] **Large Language Models (LLMs)**
+     - [ ] Tokenization and embeddings
+     - [ ] Prompt engineering
+     - [ ] Fine-tuning (full, LoRA, PEFT)
+     - [ ] LLM evaluation and benchmarks
+   - [ ] **Retrieval-Augmented Generation (RAG)**
+     - [ ] Embedding models
+     - [ ] Vector databases (e.g., Pinecone, Weaviate, pgvector)
+     - [ ] Chunking and retrieval strategies
+     - [ ] Reranking
+   - [ ] **AI Agents**
+     - [ ] Tool use and function calling
+     - [ ] Agent orchestration frameworks
+     - [ ] Multi-agent systems
+   - [ ] **MLOps / LLMOps**
+     - [ ] Model serving and inference optimization
+     - [ ] Experiment tracking and model versioning
+     - [ ] Monitoring, drift detection, and observability
+     - [ ] Cost optimization (caching, batching, quantization)
+   - [ ] **AI System Design**
+     - [ ] Designing inference pipelines
+     - [ ] Latency vs. throughput trade-offs
+     - [ ] Guardrails, safety, and responsible AI
 
 </details>
 

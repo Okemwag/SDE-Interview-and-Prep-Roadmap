@@ -35,6 +35,15 @@ Python is one of the most widely used languages in technical interviews and in i
 5. **Engineering practice (guides 10–11).** Testing and tooling questions show you can ship production code, not just solve puzzles.
 6. **Drill (guide 12).** Work through the question bank last, ideally out loud, as if in a real interview.
 
+```mermaid
+flowchart LR
+    A["Foundations<br/>(guides 1-3)"] --> B["Object model<br/>(guides 4-5)"]
+    B --> C["Modern Python + concurrency<br/>(guides 6-7)"]
+    C --> D["Internals + robustness<br/>(guides 8-9)"]
+    D --> E["Engineering practice<br/>(guides 10-11)"]
+    E --> F["Question drill<br/>(guide 12)"]
+```
+
 ## How to Use This Guide
 
 - Every code block is runnable — paste it into a Python 3.12+ REPL and experiment.

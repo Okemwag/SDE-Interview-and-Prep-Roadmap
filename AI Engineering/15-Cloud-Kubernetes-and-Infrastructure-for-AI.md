@@ -1,8 +1,6 @@
 # Cloud, Kubernetes and Infrastructure for AI
 
-You already know Docker and Kubernetes; this guide is about what breaks when the workload is an ML system: 10GB+ images, GPUs that cannot be fractionally requested by default, pods that take minutes to become ready because they are loading 70GB of weights, and autoscalers that watch CPU while the GPU sits at 100%. The theme throughout is that AI workloads violate the assumptions general-purpose infrastructure was tuned for — instant startup, cheap fungible replicas, CPU as the bottleneck — and each violation has a specific, learnable fix.
-
-This guide expands Phase 10 into practical depth: containerization discipline for ML images, GPU scheduling and sharing on Kubernetes, autoscaling on the metrics that actually matter, and Terraform patterns for GPU node pools, artifact storage, and environment separation.
+You already know Docker and Kubernetes; this guide is about what breaks when the workload is an ML system: 10GB+ images, GPUs that cannot be fractionally requested by default, pods that take minutes to become ready because they are loading 70GB of weights, and autoscalers that watch CPU while the GPU sits at 100%. AI workloads violate the assumptions general-purpose infrastructure was tuned for — instant startup, cheap fungible replicas, CPU as the bottleneck — and each violation has a specific, learnable fix. This guide expands Phase 10 into practical depth: containerization discipline for ML images, GPU scheduling and sharing on Kubernetes, autoscaling on the metrics that actually matter, and Terraform patterns for GPU node pools, artifact storage, and environment separation.
 
 Part of the [Senior AI Engineer Roadmap](./00-Senior-AI-Engineer-Roadmap.md) — Phase 10.
 
@@ -24,7 +22,7 @@ NVIDIA publishes three flavors of CUDA base images:
 | `runtime` | + cuDNN, CUDA math libraries | ~2-3GB | **Serving containers** — running precompiled wheels |
 | `devel` | + nvcc compiler, headers, static libs | ~6-8GB | **Build stages only** — compiling custom CUDA kernels |
 
-The classic mistake is shipping `devel` to production. You need `devel` only if something compiles CUDA code at build time (flash-attention from source, custom ops). Compile in a `devel` build stage, copy the resulting wheels/venv into a `runtime` final stage.
+The classic mistake is shipping `devel` to production. You need `devel` only when something compiles CUDA code at build time (flash-attention from source, custom ops): compile in a `devel` build stage, copy the resulting wheels/venv into a `runtime` final stage.
 
 ### 1.3 A Real Multi-Stage Dockerfile with uv
 
@@ -81,8 +79,7 @@ The standard pattern: the image contains code + runtime; weights are pulled at s
 
 - **Vulnerability scanning:** run Trivy/Grype in CI on every build; ML base images ship enormous CVE surface (system libs in the CUDA image, transitive Python deps). Gate on critical CVEs with a documented exception process, or the gate will just be disabled.
 - **Signed images:** sign with cosign in CI, verify at admission (Kyverno/policy-controller) so only CI-built images run in the cluster.
-- **Secret-free builds:** no tokens in layers — use `--mount=type=secret` for private index credentials; they never persist into the image.
-- **Reproducibility:** pin base image digests (`nvidia/cuda@sha256:...`) and use lockfiles; "latest CUDA" is how training suddenly stops converging after a rebuild.
+- **Secret-free, reproducible builds:** no tokens in layers — use `--mount=type=secret` for private index credentials — and pin base image digests (`nvidia/cuda@sha256:...`) plus lockfiles; "latest CUDA" is how training suddenly stops converging after a rebuild.
 
 ---
 
@@ -276,7 +273,7 @@ Node-level scaling has GPU-specific pain:
 
 ### 4.1 What Changes vs Ordinary Infra
 
-Nothing about Terraform itself — what changes is the resource mix: GPU node pools (quota-gated, region-scarce, autoscaling 0..N), object storage as a first-class citizen (model artifacts, datasets, checkpoints — with lifecycle rules, because checkpoint buckets grow without bound), IAM that lets pods read model buckets via workload identity instead of long-lived keys, and secrets (model-provider API keys) in a manager, never in state-adjacent tfvars committed to git.
+Nothing about Terraform itself — what changes is the resource mix: GPU node pools (quota-gated, region-scarce, autoscaling 0..N), object storage as a first-class citizen (model artifacts, datasets, checkpoints — with lifecycle rules, because checkpoint buckets grow without bound), IAM that lets pods read model buckets via workload identity instead of long-lived keys, and secrets (model-provider API keys) in a secret manager, never in tfvars committed to git.
 
 ### 4.2 Module Layout and Environment Separation
 
@@ -361,10 +358,8 @@ The same shape applies on EKS (`eks_node_group` + GPU AMI + S3 + IRSA) and AKS. 
 - Run containers as non-root with pinned base-image digests; scan with Trivy in CI and verify cosign signatures at admission.
 - Taint every GPU node pool; require explicit tolerations. One untainted GPU pool will eventually run someone's cron job at A100 prices.
 - Autoscale inference on queue depth or concurrency (KEDA/custom metrics), never on CPU; autoscale nodes with capacity reservations behind the serving baseline.
-- Give every slow-loading model a startup probe sized to its real load time, and make readiness mean "warmed", not "port open".
-- Set `maxUnavailable: 0` rollouts and PDBs for model servers — with multi-minute warm-up, losing capacity during a rollout is a self-inflicted outage.
-- Checkpoint training to object storage and run it on spot; serve on reserved/on-demand. Never invert this.
-- One Terraform module set, parameterized per environment, with separate remote state per env — and lifecycle rules on checkpoint buckets before they hit 100TB.
+- Give every slow-loading model a startup probe sized to its real load time, make readiness mean "warmed", not "port open", and set `maxUnavailable: 0` rollouts plus PDBs — with multi-minute warm-up, losing capacity during a rollout is a self-inflicted outage.
+- Checkpoint training to object storage and run it on spot; serve on reserved/on-demand — never invert this. One Terraform module set, parameterized per environment, with separate remote state per env, and lifecycle rules on checkpoint buckets before they hit 100TB.
 
 ## Interview Questions
 
@@ -394,10 +389,6 @@ Classic probe misconfiguration: a default liveness probe (e.g., 3 failures at 10
 
 <details><summary>When would you use spot GPUs, and when would you refuse to?</summary>
 Spot fits interruption-tolerant work: training and fine-tuning with regular checkpointing to object storage (an interruption costs only the steps since the last checkpoint), batch/offline scoring, and dev/experimentation — at 60-90% discounts this is the single biggest GPU cost lever. Refuse spot for user-facing serving of slow-loading models: a ~2-minute interruption notice combined with a 5-15 minute replacement cold start (node boot + image pull + weight load) means every reclamation is a capacity dip or outage, and spot pools can be reclaimed en masse exactly when demand (and your traffic) peaks. Standard architecture: reserved or on-demand capacity for the serving baseline, spot for training and for burst capacity behind a queue that tolerates delay. If you must serve on spot, over-provision, spread across instance types/zones, and handle the interruption notice by draining early.
-</details>
-
-<details><summary>Should model weights be baked into the container image or loaded at startup? Argue both sides.</summary>
-Load-at-startup (usual default): images stay small so code deploys are fast and cheap; weights and code version independently; one image serves many model versions via config; registries aren't abused as blob stores. Costs: startup now depends on object storage (a real availability dependency), cold starts pay the download unless you cache weights on node-local volumes, and you must pin artifact URI + hash for reproducibility. Bake-in: one immutable, atomically-rollback-able artifact; no startup dependency; works air-gapped; and with node image caches/pre-pulling, cold start can actually beat a slow object-storage download. Costs: every code change ships a multi-GB image, pull times balloon, registry limits and egress bills bite. Decision rule: bake for small models (<~1-2GB) or air-gapped/edge deployments; pull-and-cache for LLM-scale weights, which is why vLLM-style deployments mount a shared model-cache volume.
 </details>
 
 <details><summary>How would you structure Terraform for dev/staging/prod AI infrastructure, and what AI-specific resources does it manage?</summary>

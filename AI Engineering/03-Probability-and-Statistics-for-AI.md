@@ -33,8 +33,8 @@ print(f"mean {amounts.mean():.0f}  median {np.median(amounts):.0f}  p99 {np.perc
 # mean >> median: fat right tail. A model trained with MSE here chases the tail.
 
 # Normality is testable, not assumable
-print("raw    normal?", stats.shapiro(amounts[:500]).pvalue > 0.05)   # False
-print("logged normal?", stats.shapiro(np.log(amounts[:500])).pvalue > 0.05)  # True
+print("raw normal?", stats.shapiro(amounts[:500]).pvalue > 0.05,
+      "| logged normal?", stats.shapiro(np.log(amounts[:500])).pvalue > 0.05)  # False, True
 ```
 
 ```mermaid
@@ -75,7 +75,7 @@ def posterior(prior, sensitivity, fpr):
 
 for prev in [0.05, 0.005, 0.0005]:
     print(f"prevalence {prev:.2%} -> precision of a flag: {posterior(prev, 0.95, 0.03):.1%}")
-# 62.5%, 13.7%, 1.6% — same model, wildly different usefulness
+    # 62.5%, 13.7%, 1.6% — same model, wildly different usefulness
 ```
 
 Bayes' theorem is also the skeleton of ML itself: `posterior ∝ likelihood × prior`. Regularization is a prior on weights (L2 = Gaussian prior, L1 = Laplace prior), and Naive Bayes, spam filters, and Bayesian A/B testing are direct applications.
@@ -93,8 +93,7 @@ rng = np.random.default_rng(0)
 x = rng.uniform(-3, 3, 5_000)
 y = x**2 + rng.normal(0, 0.5, 5_000)          # perfectly dependent, non-linearly
 print(f"Pearson  r = {stats.pearsonr(x, y).statistic:+.3f}")   # ~0.00
-print(f"Spearman r = {stats.spearmanr(x, y).statistic:+.3f}")  # also ~0 (non-monotonic)
-print(f"MI proxy: corr(x^2, y) = {stats.pearsonr(x**2, y).statistic:+.3f}")  # ~0.97
+print(f"corr(x^2, y) = {stats.pearsonr(x**2, y).statistic:+.3f}")  # ~0.98
 # Zero correlation != independence. Trees and NNs can use x; a linear model cannot.
 ```
 
@@ -164,7 +163,7 @@ for _ in range(2_000):
     if 0 < y[idx].sum() < n:
         boot.append(roc_auc_score(y[idx], scores[idx]))
 lo, hi = np.percentile(boot, [2.5, 97.5])
-print(f"AUC {point:.3f}  95% CI [{lo:.3f}, {hi:.3f}]")   # ~±0.02 with only 160 positives
+print(f"AUC {point:.3f}  95% CI [{lo:.3f}, {hi:.3f}]")   # ~±0.035 with only ~160 positives
 ```
 
 The interval width is driven by the *minority class count*, not total rows. If your challenger beats the champion by less than the CI width, you have measured noise. Bootstrap the **difference** between two models on the same resamples (paired bootstrap) for a sharper comparison.
@@ -235,7 +234,7 @@ which = np.clip(np.digitize(p_model, bins) - 1, 0, 9)
 for b in range(0, 10, 3):
     m = which == b
     print(f"predicted {p_model[m].mean():.2f} -> observed {y[m].mean():.2f}")
-# predicted 0.16 -> observed 0.03 ... ranking intact, probabilities badly inflated
+# predicted 0.23 -> observed 0.05 ... ranking intact, probabilities badly inflated
 ```
 
 Measure with reliability curves, expected calibration error, and Brier score; fix with Platt scaling, isotonic regression, or temperature scaling **fitted on held-out data**. Recheck after any retrain or prevalence shift — calibration decays even when AUC doesn't.
@@ -291,11 +290,10 @@ sims, n_max, hits = 400, 20_000, 0
 for _ in range(sims):                      # A/A test: no true difference exists
     a, b = rng.normal(0, 1, n_max), rng.normal(0, 1, n_max)
     for n in np.linspace(1_000, n_max, 20).astype(int):   # peek 20 times
-        se = np.sqrt(a[:n].var()/n + b[:n].var()/n)
-        if abs(a[:n].mean() - b[:n].mean()) / se > 1.96:
+        if abs(a[:n].mean() - b[:n].mean()) / np.sqrt(a[:n].var()/n + b[:n].var()/n) > 1.96:
             hits += 1
             break
-print(f"false positive rate with peeking: {hits/sims:.2f}")   # ~0.3, not 0.05
+print(f"false positive rate with peeking: {hits/sims:.2f}")   # ~0.23, not 0.05
 ```
 
 If you must peek, use methods built for it: group-sequential boundaries (O'Brien-Fleming), always-valid p-values, or Bayesian monitoring with explicit decision rules.
@@ -338,8 +336,7 @@ flowchart TD
 - Check calibration (reliability curve, ECE, Brier) whenever probabilities feed decisions, and recheck after every retrain.
 - Pre-register experiments: metric, minimum detectable effect, sample size, stopping rule. No naive peeking; confirm winners on fresh holdouts.
 - Compare models within segments and with randomized assignment — aggregate comparisons under non-random routing invite Simpson's paradox.
-- Shrink small-sample estimates toward a prior (Beta-Binomial, hierarchical pooling) instead of trusting raw rates from tiny segments.
-- Use shadow deployment between offline eval and A/B test; it catches sampling bias and feature skew before they cost real money.
+- Shrink small-sample estimates toward a prior (Beta-Binomial, hierarchical pooling) instead of trusting raw rates from tiny segments, and shadow-deploy between offline eval and A/B test to catch sampling bias and feature skew early.
 
 ## Interview Questions
 
@@ -352,7 +349,7 @@ Assume y = f(x;θ) + ε with ε ~ N(0, σ²). The negative log-likelihood is (n/
 </details>
 
 <details><summary>Your challenger improves AUC from 0.912 to 0.915 on a 2,000-row test set with 8% positives. Ship it?</summary>
-Not on this evidence. With ~160 positives, the bootstrap 95% CI on AUC is roughly ±0.02 — the 0.003 difference is well inside noise. Do a paired bootstrap of the AUC difference on the same resamples, check whether the interval excludes zero, and ask how many variants were compared (multiple comparisons make one lucky winner likely). If it survives, confirm on a larger fresh holdout, then shadow deploy and A/B test on the business metric — offline AUC deltas this small rarely translate to production impact.
+Not on this evidence. With ~160 positives, the bootstrap 95% CI on AUC is roughly ±0.03 — the 0.003 difference is well inside noise. Do a paired bootstrap of the AUC difference on the same resamples, check whether the interval excludes zero, and ask how many variants were compared (multiple comparisons make one lucky winner likely). If it survives, confirm on a larger fresh holdout, then shadow deploy and A/B test on the business metric — offline AUC deltas this small rarely translate to production impact.
 </details>
 
 <details><summary>What is a p-value, what is it not, and how do multiple comparisons corrupt ML workflows?</summary>
@@ -376,7 +373,7 @@ Several compounding reasons: the offline eval set is a logged sample biased by t
 </details>
 
 <details><summary>Why is stopping an A/B test the first time p &lt; 0.05 wrong, and what should you do instead?</summary>
-A fixed-horizon test controls the false-positive rate only for a single look. Peeking repeatedly gives the test statistic many chances to wander across 1.96 by chance — an A/A simulation with 20 peeks shows a false-positive rate around 25-30%, not 5%. It is sequential multiple testing. Correct approaches: pre-compute the sample size from the minimum detectable effect and evaluate once; use group-sequential designs with spending functions (O'Brien-Fleming) that budget the alpha across planned looks; use always-valid p-values / confidence sequences; or run Bayesian monitoring with a pre-committed decision rule. Whichever you choose, the stopping rule must be fixed before the experiment starts.
+A fixed-horizon test controls the false-positive rate only for a single look. Peeking repeatedly gives the test statistic many chances to wander across 1.96 by chance — an A/A simulation with 20 peeks shows a false-positive rate around 20-25%, not 5%. It is sequential multiple testing. Correct approaches: pre-compute the sample size from the minimum detectable effect and evaluate once; use group-sequential designs with spending functions (O'Brien-Fleming) that budget the alpha across planned looks; use always-valid p-values / confidence sequences; or run Bayesian monitoring with a pre-committed decision rule. Whichever you choose, the stopping rule must be fixed before the experiment starts.
 </details>
 
 <details><summary>When does Bayesian reasoning beat raw empirical estimates in an ML system?</summary>

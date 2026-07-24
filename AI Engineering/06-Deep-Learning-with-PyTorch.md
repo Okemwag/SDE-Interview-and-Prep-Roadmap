@@ -227,7 +227,7 @@ torch.cuda.set_device(rank)
 model = DDP(MLP(128, 512, 10).cuda(rank), device_ids=[rank])
 sampler = DistributedSampler(train_ds)             # each rank gets a distinct shard
 train_dl = DataLoader(train_ds, batch_size=256, sampler=sampler)
-# per epoch: sampler.set_epoch(epoch), then the normal loop; checkpoint only on rank 0
+# per epoch: sampler.set_epoch(epoch); run the normal loop; checkpoint on rank 0 only
 ```
 
 **FSDP** (Fully Sharded Data Parallel) shards the parameters, gradients, and optimizer states themselves across ranks, gathering each layer's weights just-in-time for its forward/backward. Reach for it when the model + optimizer state no longer fits on a single GPU (roughly the multi-billion-parameter regime, or large models with Adam's 2x optimizer-state overhead). DDP first; FSDP when memory, not compute, is the binding constraint.
@@ -331,8 +331,7 @@ Random train/test splits on time series are leakage — the model trains on the 
 - **Backtesting (walk-forward validation):** train on `[t0, t1)`, predict `[t1, t2)`; slide or expand the window and repeat. Report metrics per fold and per horizon step — accuracy at horizon 1 says nothing about horizon 30.
 - **Baselines first:** naive last-value, seasonal-naive ("same hour last week"), and exponential smoothing. Deep models frequently lose to seasonal-naive on real business series; if yours doesn't beat it, ship the baseline.
 - **Handle seasonality and trend explicitly:** calendar covariates (hour, day-of-week, holidays), known-future covariates (planned promotions), and either differencing/detrending or a model family that learns them.
-- **Prediction intervals, not just point forecasts:** operational decisions (staffing, inventory) need uncertainty. Get intervals via quantile losses (pinball loss at q10/q50/q90), a parametric output head (predict mean and variance), or conformal prediction on backtest residuals. Validate **coverage**: your 90% interval should contain ~90% of actuals in the backtest.
-- **Metrics:** MAE/RMSE for scale-bound comparison, MAPE/sMAPE cautiously (explode near zero actuals), pinball loss for quantiles.
+- **Prediction intervals, not just point forecasts:** operational decisions (staffing, inventory) need uncertainty. Get intervals via quantile losses (pinball loss at q10/q50/q90), a parametric output head (predict mean and variance), or conformal prediction on backtest residuals. Validate **coverage**: your 90% interval should contain ~90% of actuals in the backtest. For point metrics use MAE/RMSE; treat MAPE/sMAPE cautiously (they explode near zero actuals).
 
 ---
 
@@ -357,12 +356,10 @@ The roadmap's capstone: a defect-detection service with a human-in-the-loop retr
 - Overfit a single batch before every long training run; it catches wiring bugs in minutes instead of GPU-days.
 - Pass logits to `CrossEntropyLoss`/`BCEWithLogitsLoss` — never pre-softmax/pre-sigmoid outputs.
 - Fix seeds and log them; checkpoint model + optimizer + scheduler state so any run is resumable and reproducible.
-- Use AdamW + warmup + cosine decay as the default recipe; sweep the LR in powers of 10 before touching anything else.
-- Always `model.train()` / `model.eval()` correctly and wrap validation in `torch.no_grad()` — dropout and BatchNorm silently corrupt results otherwise.
+- Use AdamW + warmup + cosine decay as the default recipe; sweep the LR in powers of 10 before touching anything else. Toggle `model.train()` / `model.eval()` correctly and wrap validation in `torch.no_grad()`.
 - Use mixed precision (`torch.amp`, prefer bf16 where supported) and `torch.compile` for free speed; watch for graph breaks, and clip gradient norms by default for RNNs and transformers.
 - Fine-tune pretrained backbones instead of training from scratch; use discriminative learning rates (head fast, backbone slow).
-- For time series: walk-forward backtests only, seasonal-naive as the baseline to beat, and prediction intervals with verified coverage.
-- Monitor the confidence distribution in production — it drifts before your accuracy metrics can.
+- For time series: walk-forward backtests only, seasonal-naive as the baseline to beat, and prediction intervals with verified coverage. In production, monitor the confidence distribution — it drifts before accuracy metrics can.
 
 ## Interview Questions
 

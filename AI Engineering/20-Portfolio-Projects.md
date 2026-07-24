@@ -227,6 +227,30 @@ The documentation *is* part of the project — it is what interviewers actually 
 - **Eval reports:** versioned metrics per release, so you can show a graph of quality over time instead of claiming it.
 - **Demo strategy:** a 3-minute recorded demo per project (live demos fail), a README that leads with the architecture diagram and metrics rather than install steps, and a rehearsed 5-minute narrative: problem → constraint → architecture → hardest failure → measured result. Practice answering "what would you change if you rebuilt it?" — have a real answer.
 
+A README skeleton that interviews well:
+
+```text
+# <Project name> — one-line value statement
+1. What it does and for whom (2 sentences)
+2. Architecture diagram (Mermaid) + 3 bullets on key decisions
+3. Metrics table: quality, latency p95, cost per unit, uptime
+4. The hardest problem and how it was solved (link to ADR)
+5. Evaluation: how quality is measured, link to eval reports
+6. Operations: incidents, runbooks, monitoring screenshots
+7. Running it locally (last, not first)
+```
+
+And a minimal ADR template — one page, written the day the decision is made:
+
+```text
+# ADR-004: pgvector over dedicated vector database   (2026-07-24, accepted)
+Context:  multi-tenant RAG, ~2M chunks, transactional deletes required
+Decision: PostgreSQL + pgvector as the single store for vectors + metadata
+Alternatives: Qdrant (faster ANN, second system to operate),
+              OpenSearch (hybrid built-in, heavier ops)
+Consequences: simpler deletes/tenancy via SQL; revisit past ~10M vectors
+```
+
 ## 8. Mapping to the 18-Month Progression
 
 The five projects are sequenced deliberately across the roadmap's Section 17 timeline:

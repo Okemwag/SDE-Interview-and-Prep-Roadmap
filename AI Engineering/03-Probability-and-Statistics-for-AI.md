@@ -74,8 +74,7 @@ def posterior(prior, sensitivity, fpr):
     return sensitivity * prior / evidence
 
 for prev in [0.05, 0.005, 0.0005]:
-    print(f"prevalence {prev:.2%} -> precision of a flag: {posterior(prev, 0.95, 0.03):.1%}")
-    # prints 62.5%, 13.7%, 1.6% — same model, wildly different usefulness
+    print(f"prevalence {prev:.2%} -> {posterior(prev, 0.95, 0.03):.1%}")  # 62.5%, 13.7%, 1.6%
 ```
 
 Bayes' theorem is also the skeleton of ML itself: `posterior ∝ likelihood × prior`. Regularization is a prior on weights (L2 = Gaussian prior, L1 = Laplace prior), and Naive Bayes, spam filters, and Bayesian A/B testing are direct applications.
